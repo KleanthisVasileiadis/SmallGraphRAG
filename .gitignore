@@ -1,0 +1,6 @@
+**/llm/
+**/data/
+log_200_hard_answer_gen.txt
+log_200_hard_KG_creation.txt
+saved_graph_15_hard.json
+saved_graph_200_hard.json
