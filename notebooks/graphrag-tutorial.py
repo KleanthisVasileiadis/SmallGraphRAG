@@ -241,7 +241,7 @@ kg_extractor = GraphRAGExtractor(
 # In[ ]:
 
 
-from pipeline.graph.graph_store import final_graph_node
+# from pipeline.graph.graph_store import final_graph_node
 
 # g_node = final_graph_node(final_entities, final_edges)
 
