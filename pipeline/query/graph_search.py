@@ -462,9 +462,7 @@ class GraphSearch:
 
     def query(self, query):
         
-        # entities = self._extract_entities(query)
-        # print(f"entities: {entities}\n")
-        entities = []
+        entities = self._extract_entities(query)
         most_similar_nodes = self._link_entities(entities, query)
         if not most_similar_nodes:
             print(f"No similar nodes found\n")
