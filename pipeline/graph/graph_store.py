@@ -446,13 +446,28 @@ class GraphRAGStore(SimplePropertyGraphStore):
 
         return nx_graph
 
+    def _compute_dynamic_cluster_size(self, G):
+        num_nodes = G.number_of_nodes()
+        num_edges = G.number_of_edges()
+        if num_nodes == 0:
+            return 100
+
+        density = num_edges / num_nodes
+        base = int(num_nodes / (10 + density))
+        max_cluster_size = max(500, min(base, 3000))
+        print(f"Nodes: {num_nodes}, Edges: {num_edges}, Density: {density:.2f}")
+        print(f"Dynamic max_cluster_size set to: {max_cluster_size}")
+        return max_cluster_size
+
     #Build the communities
     def build_communities(self):
         #Creates the nx graph
         self.nx_graph = self._create_nx_graph()
         print(f"NX Graph created!\n")
         #Creates the clusters using hierarchical leiden
-        clusters = hierarchical_leiden(self.nx_graph, max_cluster_size=self.max_cluster_size)
+        # clusters = hierarchical_leiden(self.nx_graph, max_cluster_size=self.max_cluster_size)
+        dynamic_size = self._compute_dynamic_cluster_size(self.nx_graph)
+        clusters = hierarchical_leiden(self.nx_graph,max_cluster_size=dynamic_size)
         print(f"Leyden Clusters created!\n")
         #Organizes clusters into hierarchical levels
         self.levels = self._organize_clusters_by_level(clusters)
@@ -468,10 +483,10 @@ class GraphRAGStore(SimplePropertyGraphStore):
         self._collect_element_summaries()
         print(f"Collected element summaries!\n")
         #Summarizes the leaf communities
-        self._compute_leaf_summaries(token_limit=12000) 
+        self._compute_leaf_summaries(token_limit=18000) 
         print(f"Computed leaf summaries!\n")
         #Summarizes the rest of the communities
-        self._compute_internal_summaries(token_limit=12000)
+        self._compute_internal_summaries(token_limit=18000)
         print(f"computed internal summaries!\n")
         #Creates embeddings for all community summaries
         self._build_summary_embeddings()

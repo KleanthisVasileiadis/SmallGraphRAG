@@ -383,8 +383,7 @@ class GraphSearch:
 
         print(f"len chunks: {len(chunks)}")
 
-        evidence_summary = self.reduce_in_batches(chunks,self._token_budget)
-        print(f"evidence summary: {evidence_summary}")
+        evidence_summary = self._reduce_in_batches(chunks,self._token_budget)
         return evidence_summary.strip()
 
     def _generate_answer(self, query, summary):
