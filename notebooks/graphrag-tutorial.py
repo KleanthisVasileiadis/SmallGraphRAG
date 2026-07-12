@@ -29,10 +29,11 @@ print("Project root added:", PROJECT_ROOT, flush=True)
 # In[ ]:
 
 
-from pipeline.data.load_and_process_dataset import load_to_nodes_HotPotQA
+from pipeline.data.load_and_process_dataset import load_to_nodes_HotPotQA, load_to_nodes_MuSiQue, load_to_nodes_2WikiMultiHopQA
 
-nodes, questions, answers = load_to_nodes_HotPotQA(type="hard", num=200)
-
+# nodes, questions, answers = load_to_nodes_HotPotQA(type="all", num=200)
+nodes, questions, answers = load_to_nodes_MuSiQue(num=200)
+# nodes, questions, answers = load_to_nodes_2WikiMultiHopQA(q_type="all", num=200)
 
 # # Configure the LLM, Prompt, and GraphRAG Extractor
 
@@ -44,16 +45,17 @@ nodes, questions, answers = load_to_nodes_HotPotQA(type="hard", num=200)
 from llama_index.llms.llama_cpp import LlamaCPP
 from llama_cpp import Llama
  
-llm_path = "/home/plas_vasileiadis/GraphRAG/pipeline/llm/local_models/qwen2_7B_instruct_gguf_Q8/qwen2-7b-instruct-q8_0.gguf"
+# llm_path = "/home/plas_vasileiadis/GraphRAG/pipeline/llm/local_models/qwen2_7B_instruct_gguf_Q8/qwen2-7b-instruct-q8_0.gguf"
+llm_path = "/home/plas_vasileiadis/GraphRAG/pipeline/llm/local_models/Mistral_7B_instruct_gguf_Q8/Mistral-7B-Instruct-v0.3-Q8_0.gguf"
 embedder_path = "/home/plas_vasileiadis/GraphRAG/pipeline/llm/local_embedings/bge-m3-q8_0.gguf/bge-m3-q8_0.gguf"
 llm = LlamaCPP(
     model_path=llm_path,
     temperature=0.0,
     max_new_tokens=4096,
-    context_window=20000,
+    context_window=13000,
     model_kwargs={
         "n_gpu_layers": 45,
-        "n_ctx": 20000,
+        "n_ctx": 13000,
         "n_threads": 8,
     },
     verbose=False,
@@ -67,21 +69,20 @@ embedder = Llama(
     verbose=False,
 )
 
-
 # ## Embedding the Chunks
 
 # In[5]:
 
 
-from pipeline.RAG.rag_retrieval import TextChunk, embed_chunks
+# from pipeline.RAG.rag_retrieval import TextChunk, embed_chunks
 
-chunks = []
-for i, node in enumerate(nodes):
-    text = node.text
-    doc_id = node.metadata.get("doc_id", node.node_id)
-    chunks.append(TextChunk(chunk_id=i,text=text,doc_id=doc_id))
-embed_chunks(chunks, embedder)
+# chunks = []
+# for i, node in enumerate(nodes):
+#     text = node.text
+#     doc_id = node.metadata.get("doc_id", node.node_id)
+#     chunks.append(TextChunk(chunk_id=i,text=text,doc_id=doc_id))
 
+# embed_chunks(chunks, embedder)
 
 # ## Entities and Relationships extraction
 
@@ -120,12 +121,12 @@ kg_extractor = GraphRAGExtractor(
 # In[ ]:
 
 
-# subgraphs = []
-# for node in nodes:
-#     print(f"NODE: {node}\n")
-#     #The triples here are of type node
-#     triples = kg_extractor([node], show_progress = True)
-#     subgraphs.append(triples)
+subgraphs = []
+for node in nodes:
+    # print(f"NODE: {node}\n")
+    #The triples here are of type node
+    triples = kg_extractor([node], show_progress = True)
+    subgraphs.append(triples)
 
 
 # In[ ]:
@@ -155,10 +156,10 @@ kg_extractor = GraphRAGExtractor(
 # In[ ]:
 
 
-# from pipeline.aggregation.aggregator import GraphAggregation
-# # unique_entities, unique_edges = aggregate(subgraphs)
-# aggregator = GraphAggregation(similarity_threshold=0.8)
-# unique_entities, unique_edges = aggregator.aggregate(subgraphs)
+from pipeline.aggregation.aggregator import GraphAggregation
+# unique_entities, unique_edges = aggregate(subgraphs)
+aggregator = GraphAggregation(similarity_threshold=0.8)
+unique_entities, unique_edges = aggregator.aggregate(subgraphs)
 
 
 # In[ ]:
@@ -187,10 +188,10 @@ kg_extractor = GraphRAGExtractor(
 # In[ ]:
 
 
-# from pipeline.clustering.cluster_entities import EntityClusterer
+from pipeline.clustering.cluster_entities import EntityClusterer
 
-# entity_clusterer = EntityClusterer(llm)
-# final_entities = entity_clusterer.cluster(unique_entities)
+entity_clusterer = EntityClusterer(llm)
+final_entities = entity_clusterer.cluster(unique_entities)
 
 
 # In[ ]:
@@ -213,10 +214,10 @@ kg_extractor = GraphRAGExtractor(
 # In[ ]:
 
 
-# from pipeline.clustering.cluster_relations import RelationClusterer
+from pipeline.clustering.cluster_relations import RelationClusterer
 
-# relation_clusterer = RelationClusterer(unique_edges, llm)
-# final_edges = relation_clusterer.cluster()
+relation_clusterer = RelationClusterer(unique_edges, llm)
+final_edges = relation_clusterer.cluster()
 
 
 # In[ ]:
@@ -241,9 +242,9 @@ kg_extractor = GraphRAGExtractor(
 # In[ ]:
 
 
-# from pipeline.graph.graph_store import final_graph_node
+from pipeline.graph.graph_store import final_graph_node
 
-# g_node = final_graph_node(final_entities, final_edges)
+g_node = final_graph_node(final_entities, final_edges)
 
 
 # In[ ]:
@@ -292,32 +293,32 @@ kg_extractor = GraphRAGExtractor(
 # In[ ]:
 
 
-# import json
+import json
 
-# graph_data = {
-#     "entities": [
-#         {
-#             "id": node.id,
-#             "name": node.name,
-#             "label": node.label,
-#             "properties": node.properties,
-#         }
-#         for node in g_node.metadata["KG_NODES_KEY"]
-#     ],
-#     "relations": [
-#         {
-#             "id": rel.id,
-#             "label": rel.label,
-#             "source_id": rel.source_id,
-#             "target_id": rel.target_id,
-#             "properties": rel.properties,
-#         }
-#         for rel in g_node.metadata["KG_RELATIONS_KEY"]
-#     ]
-# }
+graph_data = {
+    "entities": [
+        {
+            "id": node.id,
+            "name": node.name,
+            "label": node.label,
+            "properties": node.properties,
+        }
+        for node in g_node.metadata["KG_NODES_KEY"]
+    ],
+    "relations": [
+        {
+            "id": rel.id,
+            "label": rel.label,
+            "source_id": rel.source_id,
+            "target_id": rel.target_id,
+            "properties": rel.properties,
+        }
+        for rel in g_node.metadata["KG_RELATIONS_KEY"]
+    ]
+}
 
-# with open("saved_graph_200_hard.json", "w") as f:
-#     json.dump(graph_data, f)
+with open("saved_graph_200_Musique_mistral.json", "w") as f:
+    json.dump(graph_data, f)
 
 
 # # Loading the saved Knowledge Graph
@@ -330,7 +331,7 @@ import json
 from llama_index.core import PropertyGraphIndex
 from pipeline.graph.graph_store import GraphRAGStore
 
-with open("saved_graph_200_hard.json") as f:
+with open("saved_graph_200_Musique_mistral.json") as f:
     graph_data = json.load(f)
 
 store = GraphRAGStore(llm=llm, embedder=embedder)
@@ -393,6 +394,7 @@ import re
 from llama_index.core.llms import ChatMessage
 
 def final_synthesis(llm, query, community_answer, community_summary, graph_answer, graph_summary):
+
     prompt_system = (
         "You are a deterministic answer verifier and synthesizer.\n\n"
         "You receive:\n"
@@ -407,87 +409,55 @@ def final_synthesis(llm, query, community_answer, community_summary, graph_answe
         "### STRICT RULES\n"
         "- Each answer must be verified against its corresponding summary.\n"
         "- Summaries are authoritative evidence.\n"
+
         "- If an answer is unsupported by its summary, discard it.\n"
-        "- If an answer is missing, incomplete, or incorrect BUT the correct information\n"
-        "  is explicitly present inside its corresponding summary, you MAY extract\n"
-        "  the answer directly from that summary.\n"
-        "- You are allowed to infer the final answer ONLY from explicit facts\n"
-        "  contained in the summaries.\n"
-        "- Do NOT invent information beyond what is written in the summaries.\n"
-        "- If both answers are valid and consistent, choose the more precise one.\n"
-        "- If both are valid but complementary, you may synthesize ONLY if\n"
-        "  both summaries explicitly support the synthesis.\n"
-        "- If neither summary contains enough explicit information to answer → output EXACTLY:\n"
-        "  Insufficient information to answer based on the available summaries.\n"
+
+        "- If an answer is missing or incomplete BUT the correct information\n"
+        "  is explicitly present inside its summary, you MAY extract it.\n"
+
+        "### MULTI-SUMMARY REASONING (IMPORTANT)\n"
+        "- You MAY combine information from BOTH summaries ONLY IF:\n"
+        "  • They refer to the SAME entities\n"
+        "  • OR they describe CONNECTED facts needed to answer the query\n"
+        "- This is required for multi-hop reasoning.\n"
+        "- Do NOT combine unrelated summaries.\n"
+
+        "- Do NOT invent information beyond what is written.\n"
+
+        "- If both answers are valid and consistent → choose the more precise one.\n"
+
+        "- If both answers are partially correct → you MAY synthesize them\n"
+        "  ONLY if both summaries explicitly support the synthesis.\n"
+
+        "- If neither summary contains enough explicit information → output EXACTLY:\n"
+        "Insufficient information to answer based on the available summaries.\n"
+
         "- Output ONLY the final factual answer.\n"
         "- No explanation. No reasoning.\n\n"
 
-        "### EXAMPLE 1 (Both agree)\n\n"
-        "User Query:\n"
-        "Who directed Inception?\n\n"
+        "### EXAMPLE (Multi-hop reasoning)\n\n"
 
-        "Community Answer:\n"
-        "Christopher Nolan\n\n"
+        "User Query:\n"
+        "Where was the director of Inception born?\n\n"
 
         "Community Summary:\n"
-        "Inception is a 2010 science fiction film directed by Christopher Nolan.\n\n"
-
-        "Graph Answer:\n"
-        "Christopher Nolan\n\n"
+        "Inception is a film directed by Christopher Nolan.\n\n"
 
         "Graph Summary:\n"
-        "The graph shows a directed relationship between Christopher Nolan and Inception, stating that he directed the film.\n\n"
+        "Christopher Nolan was born in London.\n\n"
 
         "Final Answer:\n"
-        "Christopher Nolan\n\n"
-
-        "### EXAMPLE 2 (Answer missing but summary contains it)\n\n"
-        "User Query:\n"
-        "Who directed Inception?\n\n"
-
-        "Community Answer:\n"
-        "Unknown\n\n"
-
-        "Community Summary:\n"
-        "Inception is a 2010 science fiction film directed by Christopher Nolan.\n\n"
-
-        "Graph Answer:\n"
-        "No answer found\n\n"
-
-        "Graph Summary:\n"
-        "The graph evidence states that Christopher Nolan directed Inception.\n\n"
-
-        "Final Answer:\n"
-        "Christopher Nolan\n\n"
-
-        "### EXAMPLE 3 (Insufficient evidence)\n\n"
-        "User Query:\n"
-        "What is the population of Atlantis?\n\n"
-
-        "Community Answer:\n"
-        "1 million\n\n"
-
-        "Community Summary:\n"
-        "Atlantis is a mythical island mentioned in Plato's works.\n\n"
-
-        "Graph Answer:\n"
-        "500,000\n\n"
-
-        "Graph Summary:\n"
-        "The graph contains no demographic data about Atlantis.\n\n"
-
-        "Final Answer:\n"
-        "Insufficient information to answer based on the available summaries.\n\n"
+        "London\n\n"
     )
 
     prompt_user = (
         f"USER QUERY:\n{query}\n\n"
 
-        f"COMMUNITY ANSWER:\n{community_answer}\n\n"
-        f"COMMUNITY SUMMARY:\n{community_summary}\n\n"
-
         f"GRAPH ANSWER:\n{graph_answer}\n\n"
         f"GRAPH SUMMARY:\n{graph_summary}\n\n"
+
+        f"COMMUNITY ANSWER:\n{community_answer}\n\n"
+        f"COMMUNITY SUMMARY:\n{community_summary}\n\n"
 
         "### FINAL ANSWER:"
     )
@@ -499,17 +469,13 @@ def final_synthesis(llm, query, community_answer, community_summary, graph_answe
 
     response = str(llm.chat(messages)).strip()
     response = re.sub(r"^assistant:\s*", "", response)
-
-    response = re.split(
-        r'("""|\'\'\'|```|#|Explanation:|Reasoning:|Because)',
-        response,
-        flags=re.IGNORECASE
-    )[0].strip()
+    response = re.split(r'("""|\'\'\'|```|#|Explanation:|Reasoning:|Because|Note:)',response,flags=re.IGNORECASE)[0].strip()
 
     if not response:
         return "Insufficient information to answer based on the available summaries."
 
     return response
+
 
 
 # In[9]:
@@ -519,7 +485,7 @@ from pipeline.query.query_engine import GraphRAGQueryEngine
 from pipeline.RAG.rag_retrieval import RAGRetriever, rag_answer_query
 from pipeline.query.graph_search import GraphSearch
 
-query_engine = GraphRAGQueryEngine(graph_store=index.property_graph_store, llm=llm, embedder=embedder,chunk_token_limit=1, final_context_token_limit=15000, 
+query_engine = GraphRAGQueryEngine(graph_store=index.property_graph_store, llm=llm, embedder=embedder,chunk_token_limit=1, final_context_token_limit=11000, 
                                    shuffle_seed=42)
 # rag_retriever = RAGRetriever(chunks)
 
@@ -580,7 +546,7 @@ for question in questions:
 # In[11]:
 
 
-from pipeline.evaluation.compute_metrics import f1_score, exact_match, llm_evaluation, contains_answer, hit_at_kwords
+from GraphRAG.pipeline.evaluation.evaluate import f1_score, exact_match, llm_evaluation, contains_answer, hit_at_kwords
 
 em_scores = [exact_match(la, a) for la, a in zip(llms_answers, answers)]
 f1_scores = [f1_score(la, a) for la, a in zip(llms_answers, answers)]

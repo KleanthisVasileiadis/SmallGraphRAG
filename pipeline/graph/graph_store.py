@@ -7,13 +7,11 @@ from collections import defaultdict
 import networkx as nx
 import numpy as np
 import re
-
 from pipeline.debug.debug_functions import graph_statistics
 
 def final_graph_node(final_entities, final_edges):
     #Creates the final Graph node
     g_node = TextNode(text="",metadata={})
-
     existing_nodes = []
     existing_relations = []
     metadata = g_node.metadata.copy()
@@ -36,48 +34,37 @@ def final_graph_node(final_entities, final_edges):
             node = entity_obj
         else: 
             node = EntityNode(name=label,properties={"cluster_members": entity_obj.get("cluster_members", [])})
-        
         entity_lookup[label] = node
         existing_nodes.append(node)
 
     #For each edge
     for label, edge_info in final_edges.items():
         for member in edge_info["cluster_members"]:
-
             #Check if the description exists
             if len(member) == 3:
                 subj, rel, obj = member
                 desc = ""
             else:
                 subj, rel, obj, desc = member
-                
             subj_cluster = entity_cluster_lookup.get(subj, subj)
             obj_cluster = entity_cluster_lookup.get(obj, obj)
             subj_node = entity_lookup.get(subj_cluster)
             obj_node = entity_lookup.get(obj_cluster)
-
             #If the node doesnt exist i continue to the next loop
             if subj_node is None or obj_node is None:
                 continue
-                
             #Adds the final Relation item to the existing_relations list
             rel_node = Relation(
                 label=label,
                 source_id=subj_node.id,
                 target_id=obj_node.id,
-                properties={
-                    "cluster_label": label,
-                    "cluster_members": edge_info["cluster_members"],
-                    "relationship_description": desc
-                },
+                properties={"cluster_label": label,"cluster_members": edge_info["cluster_members"],"relationship_description": desc},
             )
-        
             existing_relations.append(rel_node)
 
     #And updates the nodes metadata
     g_node.metadata["KG_NODES_KEY"] = existing_nodes
     g_node.metadata["KG_RELATIONS_KEY"] = existing_relations
-
     print(f"Created unified graph with {len(existing_nodes)} entities and {len(existing_relations)} triples.")
     return g_node
 
@@ -98,7 +85,6 @@ class GraphRAGStore(SimplePropertyGraphStore):
         self.node_lookup = {}
         self.community_element_summaries = {}
         self.levels = {} 
-
         self.node_vecs = {}
 
     def get_node_embeddings(self):
@@ -135,7 +121,6 @@ class GraphRAGStore(SimplePropertyGraphStore):
         """
         for cid, text in self.community_summary.items():
             emb = self.embedder.embed(text)
-
             emb = np.array(emb, dtype=np.float32)
             norm = np.linalg.norm(emb)
             if norm == 0 or np.isnan(norm):
@@ -147,14 +132,13 @@ class GraphRAGStore(SimplePropertyGraphStore):
         return len(self.llm._model.tokenize(text.encode("utf-8")))
 
     def _reduce_in_batches(self, texts, token_limit):
-
         if not texts:
             return ""
 
         #reserve tokens for system prompt and formatting
         safe_limit = token_limit - 1500
         total_tokens = sum(self._count_tokens(t) for t in texts)
-
+        
         #If everything fits in one call
         if total_tokens <= safe_limit:
             return self._llm_summarize("\n".join(texts))
@@ -164,7 +148,6 @@ class GraphRAGStore(SimplePropertyGraphStore):
         current_tokens = 0
         for text in texts:
             text_tokens = self._count_tokens(text)
-
             #single text too large
             if text_tokens > safe_limit:
                 tokens = text.split()
@@ -172,7 +155,7 @@ class GraphRAGStore(SimplePropertyGraphStore):
                 summary = self._llm_summarize(truncated_text)
                 reduced.append(summary)
                 continue
-
+            
             #chunk would exceed limit
             if current_tokens + text_tokens > safe_limit:
                 chunk_text = "\n".join(current_chunk)
@@ -189,7 +172,7 @@ class GraphRAGStore(SimplePropertyGraphStore):
             chunk_text = "\n".join(current_chunk)
             chunk_summary = self._llm_summarize(chunk_text)
             reduced.append(chunk_summary)
-
+        
         #Stop recursion if only one summary remains
         if len(reduced) == 1:
             return reduced[0]
@@ -305,14 +288,8 @@ class GraphRAGStore(SimplePropertyGraphStore):
                 self.community_summary[cid] = ""
                 continue
 
-            # for text in element_texts:
-            #     print(f"text: {text}\n")
-
             #Recursive reduce
             summary = self._reduce_in_batches(element_texts, token_limit)
-
-            # print(f"summary of the texts: {summary}\n")
-
             self.community_summary[cid] = summary
 
 
@@ -333,7 +310,6 @@ class GraphRAGStore(SimplePropertyGraphStore):
         self.community_element_summaries = {}
         for level, clusters in self.levels.items():
             for cluster_id, nodes in clusters.items():
-
                 elements = []
                 #Node summaries
                 for node in nodes:
@@ -387,7 +363,6 @@ class GraphRAGStore(SimplePropertyGraphStore):
 
             #Creates the parent-child relations
             for node_id, child_cluster in mapping_next_level.items():
-
                 if node_id not in mapping_level:
                     continue
 
@@ -436,11 +411,7 @@ class GraphRAGStore(SimplePropertyGraphStore):
             #skip edges with missing endpoints
             if source not in self.node_lookup or target not in self.node_lookup:
                 continue
-            nx_graph.add_edge(
-                source,
-                target,
-                relationship=relation.label,
-                description=relation.properties.get("relationship_description", ""))
+            nx_graph.add_edge(source,target,relationship=relation.label,description=relation.properties.get("relationship_description", ""))
 
         graph_statistics(nx_graph)
 
@@ -455,7 +426,6 @@ class GraphRAGStore(SimplePropertyGraphStore):
         density = num_edges / num_nodes
         base = int(num_nodes / (10 + density))
         max_cluster_size = max(500, min(base, 3000))
-        print(f"Nodes: {num_nodes}, Edges: {num_edges}, Density: {density:.2f}")
         print(f"Dynamic max_cluster_size set to: {max_cluster_size}")
         return max_cluster_size
 
@@ -465,7 +435,6 @@ class GraphRAGStore(SimplePropertyGraphStore):
         self.nx_graph = self._create_nx_graph()
         print(f"NX Graph created!\n")
         #Creates the clusters using hierarchical leiden
-        # clusters = hierarchical_leiden(self.nx_graph, max_cluster_size=self.max_cluster_size)
         dynamic_size = self._compute_dynamic_cluster_size(self.nx_graph)
         clusters = hierarchical_leiden(self.nx_graph,max_cluster_size=dynamic_size)
         print(f"Leyden Clusters created!\n")
@@ -483,10 +452,10 @@ class GraphRAGStore(SimplePropertyGraphStore):
         self._collect_element_summaries()
         print(f"Collected element summaries!\n")
         #Summarizes the leaf communities
-        self._compute_leaf_summaries(token_limit=18000) 
+        self._compute_leaf_summaries(token_limit=11000) 
         print(f"Computed leaf summaries!\n")
         #Summarizes the rest of the communities
-        self._compute_internal_summaries(token_limit=18000)
+        self._compute_internal_summaries(token_limit=11000)
         print(f"computed internal summaries!\n")
         #Creates embeddings for all community summaries
         self._build_summary_embeddings()

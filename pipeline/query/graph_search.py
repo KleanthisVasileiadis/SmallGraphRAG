@@ -14,19 +14,17 @@ class GraphSearch:
     llm: LLM
     embedder: Any 
 
-    def __init__(self,graph_store: GraphRAGStore,llm: LLM,embedder: Any ,similarity_top_k: int = 5,max_hops: int = 3,
-        max_evidence_nodes: int = 20,similarity_threshold: float = 0.5,token_budget: int = 10000):
-
+    def __init__(self,graph_store: GraphRAGStore,llm: LLM,embedder: Any ,similarity_top_k: int = 5,max_hops: int = 3, 
+                 max_evidence_nodes: int = 20,similarity_threshold: float = 0.5,token_budget: int = 10000):
+        
         self._graph_store = graph_store
         self._llm = llm
         self._embedder = embedder
-
         self._similarity_top_k = similarity_top_k
         self._max_hops = max_hops
         self._max_evidence_nodes = max_evidence_nodes
         self._similarity_threshold = similarity_threshold
         self._token_budget = token_budget
-
         self._node_embeddings = self._graph_store.get_node_embeddings()
         self._node_ids = list(self._node_embeddings.keys())
 
@@ -80,11 +78,9 @@ class GraphSearch:
             #exact match
             if text == node_name:
                 score = 1.2
-
             #substring match
             elif text in node_text:
                 score = 1.0
-
             #token overlap
             else:
                 overlap = len(tokens & node_tokens)
@@ -154,6 +150,7 @@ class GraphSearch:
         for node in start_nodes:
             queue.append((node, 0, [node]))
 
+        #BFS search 
         while queue:
             current_node, depth, path = queue.popleft()
             if depth >= self._max_hops:
@@ -193,7 +190,7 @@ class GraphSearch:
     def _build_evidence_chunks(self, subgraph: dict):
 
         chunks = []
-        #Nodes
+        #Evidence for Nodes
         for node_id in subgraph["nodes"]:
             node_obj = self._graph_store.node_lookup.get(node_id)
             if not node_obj:
@@ -201,17 +198,15 @@ class GraphSearch:
 
             name = node_obj.name
             desc = node_obj.properties.get("entity_description", "") or node_obj.properties.get("relationship_description", "")
-
             text = (
                 f"NODE:\n"
                 f"Name: {name}\n"
                 f"ID: {node_id}\n"
                 f"Description: {desc}"
             )
-
             chunks.append(text)
 
-        #Edges
+        #Evidence for Edges
         for edge in subgraph["edges"]:
             text = (
                 f"RELATIONSHIP:\n"
@@ -220,10 +215,9 @@ class GraphSearch:
                 f"Type: {edge['relationship']}\n"
                 f"Description: {edge['description']}"
             )
-
             chunks.append(text)
 
-        #Paths
+        #Evidence for Paths
         for path in subgraph["paths"]:
             readable_path = " -> ".join(path)
             text = f"REASONING PATH:\n{readable_path}"
@@ -232,7 +226,7 @@ class GraphSearch:
         return chunks
 
     def _rank_chunks_by_query(self, chunks, query):
-
+        #Most similar chunks to the query
         query_emb = self._normalize(self._embedder.embed(query))
         scored = []
         for chunk in chunks:
@@ -317,7 +311,6 @@ class GraphSearch:
                 """,
             ),
         ]
-
         response = self._llm.chat(messages)
         return re.sub(r"^assistant:\s*", "", str(response)).strip()
     
@@ -332,7 +325,6 @@ class GraphSearch:
         #reserve tokens for system prompt and formatting
         safe_limit = token_limit - 1500
         total_tokens = sum(self._count_tokens(t) for t in texts)
-
         #If everything fits in one call
         if total_tokens <= safe_limit:
             return self._llm_summarize("\n".join(texts))
@@ -342,7 +334,6 @@ class GraphSearch:
         current_tokens = 0
         for text in texts:
             text_tokens = self._count_tokens(text)
-
             #single text too large
             if text_tokens > safe_limit:
                 tokens = text.split()
@@ -375,14 +366,10 @@ class GraphSearch:
         return self._reduce_in_batches(reduced, token_limit)
 
     def _summarize_evidence(self, subgraph, query):
-
         chunks = self._build_evidence_chunks(subgraph)
         chunks = self._rank_chunks_by_query(chunks, query)
         if not chunks:
             return ""
-
-        print(f"len chunks: {len(chunks)}")
-
         evidence_summary = self._reduce_in_batches(chunks,self._token_budget)
         return evidence_summary.strip()
 
@@ -461,24 +448,17 @@ class GraphSearch:
         return response.strip()
 
     def query(self, query):
-        
+        #Query Entities
         entities = self._extract_entities(query)
+        #Most similar nodes
         most_similar_nodes = self._link_entities(entities, query)
         if not most_similar_nodes:
-            print(f"No similar nodes found\n")
             return "Insufficient information to answer based on the available summary.", ""
-        print(f"most_similar_nodes : {most_similar_nodes}")
+
+        #Retrieves subgraph
         subgraph = self._expand_subgraph(most_similar_nodes, query)
-
-        print("\n[DEBUG] FINAL SUBGRAPH")
-        print("nodes:", len(subgraph["nodes"]))
-        print("edges:", len(subgraph["edges"]))
-        print("paths:", len(subgraph["paths"]))
-
-        # print(f"subgraph: {subgraph}\n")
+        #Summarizes the evidence
         summary = self._summarize_evidence(subgraph, query)
-        # print(f"summary: {summary}\n")
+        #Generates the final answer
         answer = self._generate_answer(query, summary)
-        # print(f"anwser: {answer}\n")
-
         return answer, summary
